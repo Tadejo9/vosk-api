@@ -36,6 +36,7 @@ public class SpeechService {
     private final int sampleRate;
     private final static float BUFFER_SIZE_SECONDS = 0.2f;
     private final int bufferSize;
+    private final int partialResultThreshold;
     private final AudioRecord recorder;
 
     private RecognizerThread recognizerThread;
@@ -48,9 +49,10 @@ public class SpeechService {
      *
      * @throws IOException thrown if audio recorder can not be created for some reason.
      */
-    public SpeechService(Recognizer recognizer, float sampleRate) throws IOException {
+    public SpeechService(Recognizer recognizer, float sampleRate, int partialResultThreshold) throws IOException {
         this.recognizer = recognizer;
         this.sampleRate = (int) sampleRate;
+        this.partialResultThreshold = partialResultThreshold;
 
         bufferSize = Math.round(this.sampleRate * BUFFER_SIZE_SECONDS);
         recorder = new AudioRecord(
@@ -211,6 +213,7 @@ public class SpeechService {
 
             short[] buffer = new short[bufferSize];
 
+            int partialResultThresholdCounter = 0;
             while (!interrupted()
                     && ((timeoutSamples == NO_TIMEOUT) || (remainingSamples > 0))) {
                 int nread = recorder.read(buffer, 0, buffer.length);
@@ -231,6 +234,11 @@ public class SpeechService {
                     final String result = recognizer.getResult();
                     mainHandler.post(() -> listener.onResult(result));
                 } else {
+                    if (partialResultThresholdCounter != this.partialResultThreshold) {
+                        partialResultThresholdCounter++;
+                        continue;
+                    }
+
                     final String partialResult = recognizer.getPartialResult();
                     mainHandler.post(() -> listener.onPartialResult(partialResult));
                 }
